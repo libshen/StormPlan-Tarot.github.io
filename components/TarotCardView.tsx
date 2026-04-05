@@ -1,5 +1,6 @@
 
 import React, { useRef, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { DeckCard, DrawEffect } from '../types';
 import gsap from 'gsap';
 
@@ -31,9 +32,10 @@ export const TarotCardView: React.FC<Props> = ({
   const glowRef = useRef<HTMLDivElement>(null); // For Resonance
   const particlesRef = useRef<HTMLDivElement>(null); // For Stardust
   const threadPathRef = useRef<SVGPathElement>(null); // For Thread
-  const threadWrapRef = useRef<HTMLDivElement>(null); // For Thread
+  const [threadAnchor, setThreadAnchor] = useState({ x: 0, y: 0 });
   
   const [hasError, setHasError] = useState(false);
+  const showThread = drawEffect === 'thread' && isSelected && !isFlipped;
   
   // Track if this is the first time animating to avoid initial load weirdness
   const isFirstRender = useRef(true);
@@ -145,38 +147,55 @@ export const TarotCardView: React.FC<Props> = ({
   }, [isFlipped, drawEffect]);
 
   useEffect(() => {
-    if (drawEffect !== 'thread' || !isSelected || isFlipped) {
+    if (!showThread) {
+      return;
+    }
+
+    let frameId = 0;
+    const updateAnchor = () => {
+      if (cardRef.current) {
+        const rect = cardRef.current.getBoundingClientRect();
+        setThreadAnchor({
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height * 0.94
+        });
+      }
+      frameId = requestAnimationFrame(updateAnchor);
+    };
+
+    updateAnchor();
+    return () => cancelAnimationFrame(frameId);
+  }, [showThread, position.x, position.y, position.rotation, position.zIndex]);
+
+  useEffect(() => {
+    if (!showThread || !threadPathRef.current) {
       if (threadPathRef.current) {
         gsap.killTweensOf(threadPathRef.current);
-      }
-      if (threadWrapRef.current) {
-        gsap.killTweensOf(threadWrapRef.current);
       }
       return;
     }
 
-    if (threadPathRef.current) {
-      gsap.killTweensOf(threadPathRef.current);
-      gsap.fromTo(
-        threadPathRef.current,
-        { strokeDashoffset: 120, opacity: 0.45 },
-        { strokeDashoffset: 0, opacity: 0.95, duration: 1.3, ease: 'none', repeat: -1 }
-      );
-    }
+    gsap.killTweensOf(threadPathRef.current);
+    gsap.fromTo(
+      threadPathRef.current,
+      { strokeDasharray: 1, strokeDashoffset: 1, opacity: 0.3 },
+      { strokeDashoffset: 0, opacity: 0.95, duration: 0.7, ease: 'power2.out' }
+    );
+  }, [showThread]);
 
-    if (threadWrapRef.current) {
-      gsap.killTweensOf(threadWrapRef.current);
-      gsap.fromTo(
-        threadWrapRef.current,
-        { x: -2 },
-        { x: 2, duration: 1.8, ease: 'sine.inOut', yoyo: true, repeat: -1 }
-      );
-    }
-  }, [drawEffect, isSelected, isFlipped]);
-
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+  const startX = threadAnchor.x;
+  const startY = viewportHeight + 16;
+  const endX = threadAnchor.x;
+  const endY = threadAnchor.y;
+  const midY = startY - Math.max(220, (startY - endY) * 0.55);
+  const sway = Math.sin((Date.now() / 260) % (Math.PI * 2)) * 10;
+  const threadPath = `M ${startX} ${startY} C ${startX - 20 + sway} ${midY}, ${endX + 16 - sway} ${endY + 120}, ${endX} ${endY}`;
 
   return (
-    <div 
+    <>
+    <div
       ref={cardRef}
       id={id}
       onClick={onClick}
@@ -186,30 +205,6 @@ export const TarotCardView: React.FC<Props> = ({
         top: '50%',
       }}
     >
-      {/* THREAD EFFECT LINE */}
-      {drawEffect === 'thread' && isSelected && !isFlipped && (
-          <div ref={threadWrapRef} className="absolute top-full left-1/2 -translate-x-1/2 pointer-events-none z-[-1]">
-              <svg width="84" height="980" viewBox="0 0 84 980" className="overflow-visible opacity-85">
-                  <path
-                    d="M42 0 C 58 130, 26 280, 42 440 C 58 610, 24 790, 42 980"
-                    stroke="rgba(239, 68, 68, 0.35)"
-                    strokeWidth="8"
-                    fill="none"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    ref={threadPathRef}
-                    d="M42 0 C 58 130, 26 280, 42 440 C 58 610, 24 790, 42 980"
-                    stroke="rgba(248, 113, 113, 0.95)"
-                    strokeWidth="3"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeDasharray="18 10"
-                  />
-              </svg>
-          </div>
-      )}
-
       {/* RESONANCE GLOW OVERLAY */}
       {drawEffect === 'resonance' && (
           <div ref={glowRef} className="absolute inset-0 bg-white rounded-xl pointer-events-none opacity-0 mix-blend-overlay z-50 transition-opacity" />
@@ -294,5 +289,32 @@ export const TarotCardView: React.FC<Props> = ({
         </div>
       </div>
     </div>
+    {showThread && typeof document !== 'undefined' && createPortal(
+      <svg
+        className="fixed inset-0 w-screen h-screen pointer-events-none z-[25]"
+        width={viewportWidth}
+        height={viewportHeight}
+        viewBox={`0 0 ${viewportWidth} ${viewportHeight}`}
+      >
+        <path
+          d={threadPath}
+          stroke="rgba(127, 29, 29, 0.45)"
+          strokeWidth="6"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <path
+          ref={threadPathRef}
+          d={threadPath}
+          pathLength={1}
+          stroke="rgba(220, 38, 38, 0.95)"
+          strokeWidth="2.5"
+          fill="none"
+          strokeLinecap="round"
+        />
+      </svg>,
+      document.body
+    )}
+    </>
   );
 };
