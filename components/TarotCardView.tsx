@@ -30,7 +30,8 @@ export const TarotCardView: React.FC<Props> = ({
   const cardRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null); // For Resonance
   const particlesRef = useRef<HTMLDivElement>(null); // For Stardust
-  const threadRef = useRef<HTMLDivElement>(null); // For Thread
+  const threadPathRef = useRef<SVGPathElement>(null); // For Thread
+  const threadWrapRef = useRef<HTMLDivElement>(null); // For Thread
   
   const [hasError, setHasError] = useState(false);
   
@@ -101,8 +102,9 @@ export const TarotCardView: React.FC<Props> = ({
 
         // --- 4. THREAD OF FATE ---
         else if (drawEffect === 'thread') {
-            duration = 1.2;
-            ease = "elastic.out(1, 0.75)";
+            duration = 1.05;
+            ease = "power3.out";
+            target.rotation = 0; // Keep selected card upright for thread effect
         }
     }
 
@@ -142,6 +144,36 @@ export const TarotCardView: React.FC<Props> = ({
     }
   }, [isFlipped, drawEffect]);
 
+  useEffect(() => {
+    if (drawEffect !== 'thread' || !isSelected || isFlipped) {
+      if (threadPathRef.current) {
+        gsap.killTweensOf(threadPathRef.current);
+      }
+      if (threadWrapRef.current) {
+        gsap.killTweensOf(threadWrapRef.current);
+      }
+      return;
+    }
+
+    if (threadPathRef.current) {
+      gsap.killTweensOf(threadPathRef.current);
+      gsap.fromTo(
+        threadPathRef.current,
+        { strokeDashoffset: 120, opacity: 0.45 },
+        { strokeDashoffset: 0, opacity: 0.95, duration: 1.3, ease: 'none', repeat: -1 }
+      );
+    }
+
+    if (threadWrapRef.current) {
+      gsap.killTweensOf(threadWrapRef.current);
+      gsap.fromTo(
+        threadWrapRef.current,
+        { x: -2 },
+        { x: 2, duration: 1.8, ease: 'sine.inOut', yoyo: true, repeat: -1 }
+      );
+    }
+  }, [drawEffect, isSelected, isFlipped]);
+
 
   return (
     <div 
@@ -155,8 +187,27 @@ export const TarotCardView: React.FC<Props> = ({
       }}
     >
       {/* THREAD EFFECT LINE */}
-      {drawEffect === 'thread' && (isHovered || isSelected) && !isFlipped && (
-          <div ref={threadRef} className="absolute bottom-0 left-1/2 w-0.5 h-[100vh] bg-red-500/60 origin-top transform translate-y-full -translate-x-1/2 pointer-events-none z-[-1] shadow-[0_0_10px_red]" />
+      {drawEffect === 'thread' && isSelected && !isFlipped && (
+          <div ref={threadWrapRef} className="absolute top-full left-1/2 -translate-x-1/2 pointer-events-none z-[-1]">
+              <svg width="84" height="980" viewBox="0 0 84 980" className="overflow-visible opacity-85">
+                  <path
+                    d="M42 0 C 58 130, 26 280, 42 440 C 58 610, 24 790, 42 980"
+                    stroke="rgba(239, 68, 68, 0.35)"
+                    strokeWidth="8"
+                    fill="none"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    ref={threadPathRef}
+                    d="M42 0 C 58 130, 26 280, 42 440 C 58 610, 24 790, 42 980"
+                    stroke="rgba(248, 113, 113, 0.95)"
+                    strokeWidth="3"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray="18 10"
+                  />
+              </svg>
+          </div>
       )}
 
       {/* RESONANCE GLOW OVERLAY */}
